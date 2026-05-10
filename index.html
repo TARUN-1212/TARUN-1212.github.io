@@ -706,6 +706,7 @@
 // Tab names below must match exactly your sheet tabs
 // ════════════════════════════════════════════════
 const SHEET_ID = '1cZt_4LQ8danJsrh3SxbzB-aF95euMnvhUcEWb8jdrFI';
+const USE_SHEET = false; // set to true when sheet is filled with real data
 const sheetURL = tab =>
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
 
@@ -734,6 +735,7 @@ function csvToObjects(text) {
   });
 }
 async function fetchSheet(tab) {
+  if (!USE_SHEET) return null;
   try {
     const res = await fetch(sheetURL(tab));
     if (!res.ok) return null;
@@ -907,14 +909,53 @@ async function loadData() {
   let aboutData = FALLBACK.about;
   let statsData = FALLBACK.stats;
   if (aboutRows && aboutRows.length) {
+    // Sheet uses "Field" / "Value" columns — normalize field names to snake_case keys
     const kvMap = {};
-    aboutRows.forEach(r => { if (r.key) kvMap[r.key.toLowerCase()] = r.value; });
-    if (kvMap.email) { aboutData = { ...aboutData, ...kvMap }; }
-    if (kvMap.h_index) statsData = { papers: +kvMap.paper_count||statsData.papers, citations: +kvMap.citations||statsData.citations, hindex: +kvMap.h_index||statsData.hindex, projects: +kvMap.project_count||statsData.projects };
-    if (kvMap.cv_url) document.getElementById('cv-btn').href = kvMap.cv_url;
-    if (kvMap.email) document.getElementById('link-email').href = `mailto:${kvMap.email}`;
-    if (kvMap.linkedin) document.getElementById('link-linkedin').href = `https://linkedin.com/in/${kvMap.linkedin}`;
-    if (kvMap.scholar) document.getElementById('link-scholar').href = `https://scholar.google.com/citations?user=${kvMap.scholar}`;
+    aboutRows.forEach(r => {
+      const k = (r.field || r.key || '').trim();
+      if (k) {
+        const nk = k.toLowerCase().replace(/[\s\/\-]+/g, '_').replace(/[^a-z0-9_]/g, '');
+        kvMap[nk] = (r.value || '').trim();
+      }
+    });
+
+    // Helper: use value as-is if it's already a full URL, else build one
+    const fullURL = (val, prefix) => val.startsWith('http') ? val : prefix + val;
+
+    // CV download
+    const cvVal = kvMap.cv_resume || kvMap.cv_url || '';
+    if (cvVal) document.getElementById('cv-btn').href = cvVal;
+
+    // Email
+    if (kvMap.email) {
+      const emailEl = document.getElementById('link-email');
+      emailEl.href = `mailto:${kvMap.email}`;
+      emailEl.querySelector('.contact-link-sub').textContent = kvMap.email;
+    }
+
+    // LinkedIn
+    if (kvMap.linkedin) {
+      const li = fullURL(kvMap.linkedin, 'https://linkedin.com/in/');
+      const liEl = document.getElementById('link-linkedin');
+      liEl.href = li;
+      liEl.querySelector('.contact-link-sub').textContent = li.replace('https://','');
+    }
+
+    // Google Scholar
+    const scholarVal = kvMap.google_scholar || kvMap.scholar || '';
+    if (scholarVal) {
+      const gs = fullURL(scholarVal, 'https://scholar.google.com/citations?user=');
+      const gsEl = document.getElementById('link-scholar');
+      gsEl.href = gs;
+    }
+
+    // Stats — sheet uses "H-Index", "Paper Count", etc.
+    statsData = {
+      papers:    +(kvMap.paper_count   || kvMap.papers)    || statsData.papers,
+      citations: +(kvMap.citations)                         || statsData.citations,
+      hindex:    +(kvMap.h_index       || kvMap.hindex)     || statsData.hindex,
+      projects:  +(kvMap.project_count || kvMap.projects)   || statsData.projects,
+    };
   }
 
   renderStats(statsData);
