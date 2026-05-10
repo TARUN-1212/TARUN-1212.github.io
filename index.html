@@ -334,6 +334,53 @@
     /* ── REVEAL ── */
     .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
     .reveal.visible { opacity: 1; transform: none; }
+
+    /* ── OSCILLOSCOPE ── */
+    #scope-section {
+      position: relative; z-index: 2;
+      background: var(--bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      overflow: hidden; height: 140px;
+    }
+    #scope-canvas { width: 100%; height: 100%; display: block; }
+    .scope-label {
+      position: absolute; top: 50%; left: 2rem; transform: translateY(-50%);
+      font-family: var(--mono); font-size: 0.7rem; color: var(--green);
+      opacity: 0.6; line-height: 1.8; pointer-events: none;
+    }
+    .scope-label span { display: block; color: var(--muted); }
+    .scope-grid-overlay {
+      position: absolute; inset: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(0,255,136,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,136,0.04) 1px, transparent 1px);
+      background-size: 40px 35px;
+    }
+
+    /* ── CTF WRITEUPS ── */
+    #writeups { background: var(--bg); }
+    .writeups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; }
+    .writeup-card {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 1.5rem; transition: all 0.25s; display: flex; flex-direction: column;
+      text-decoration: none; color: inherit;
+    }
+    .writeup-card:hover { border-color: rgba(124,58,237,0.5); box-shadow: 0 0 30px rgba(124,58,237,0.08); transform: translateY(-4px); }
+    .writeup-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .writeup-event { font-family: var(--mono); font-size: 0.7rem; color: var(--purple); }
+    .writeup-diff {
+      font-family: var(--mono); font-size: 0.65rem; padding: 0.15rem 0.5rem;
+      border-radius: 999px; border: 1px solid;
+    }
+    .diff-hard   { border-color: #ff5f57; color: #ff5f57; }
+    .diff-medium { border-color: var(--amber); color: var(--amber); }
+    .diff-easy   { border-color: var(--green); color: var(--green); }
+    .writeup-title { font-size: 0.95rem; font-weight: 700; color: var(--cyan); margin-bottom: 0.4rem; }
+    .writeup-desc  { font-size: 0.82rem; color: var(--muted); line-height: 1.6; flex: 1; }
+    .writeup-footer { margin-top: 1rem; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); display: flex; justify-content: space-between; }
+    .writeup-footer .wf-link { color: var(--purple); }
+
+    /* ── SCHOLAR BADGE ── */
+    .stat-live { font-family: var(--mono); font-size: 0.65rem; color: var(--green); margin-top: 0.2rem; opacity: 0.7; }
   </style>
 </head>
 <body>
@@ -362,6 +409,7 @@
       <li><a href="#research">research</a></li>
       <li><a href="#projects">projects</a></li>
       <li><a href="#awards">awards</a></li>
+      <li><a href="#writeups">ctf</a></li>
       <li><a href="#contact">contact</a></li>
       <li><a href="#" class="btn-cv" id="cv-btn" download>resume.pdf</a></li>
     </ul>
@@ -399,6 +447,16 @@
     </div>
   </section>
 
+  <!-- OSCILLOSCOPE DIVIDER -->
+  <div id="scope-section">
+    <div class="scope-grid-overlay"></div>
+    <canvas id="scope-canvas"></canvas>
+    <div class="scope-label">
+      CH1: PWR <span>TRIG: RISING</span>
+      <span>10ms/div · 100mV/div</span>
+    </div>
+  </div>
+
   <!-- STATS -->
   <section id="stats">
     <div class="stats-inner">
@@ -409,6 +467,7 @@
       <div class="stat-item reveal">
         <div class="stat-num" id="stat-citations">0</div>
         <div class="stat-label">// citations</div>
+        <div class="stat-live" id="scholar-badge"></div>
       </div>
       <div class="stat-item reveal">
         <div class="stat-num" id="stat-hindex">0</div>
@@ -658,11 +717,25 @@
     </div>
   </section>
 
+  <!-- CTF WRITEUPS -->
+  <section id="writeups">
+    <div class="section-wrap">
+      <div class="section-header reveal">
+        <span class="section-label">06 //</span>
+        <h2 class="section-title">CTF Writeups</h2>
+        <div class="section-line"></div>
+      </div>
+      <div class="writeups-grid" id="writeups-grid">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </section>
+
   <!-- CONTACT -->
   <section id="contact">
     <div class="section-wrap">
       <div class="section-header reveal">
-        <span class="section-label">06 //</span>
+        <span class="section-label">07 //</span>
         <h2 class="section-title">Contact</h2>
         <div class="section-line"></div>
       </div>
@@ -787,6 +860,12 @@ const FALLBACK = {
     { item: 'EM leakage profiling of SPHINCS+ hash computations', status: 'IN PROGRESS — measurement phase' },
     { item: 'High-throughput NTT core design for PQC ASIC (45nm)', status: 'IN PROGRESS — RTL verification' },
   ],
+  writeups: [
+    { title: 'Breaking AES on ChipWhisperer: A CPA Attack Walkthrough', event: 'CHES 2024 CTF', date: '2024-09', difficulty: 'Medium', description: 'Step-by-step Correlation Power Analysis attack on an unprotected AES-128 implementation. Recovered full 128-bit key in under 2,000 traces using CW-Lite.', url: '#', tags: 'CPA,AES,ChipWhisperer,Power Analysis' },
+    { title: 'Fault Injection on CRYSTALS-Kyber: Skipping the Decapsulation Check', event: 'Hardware CTF 2024', date: '2024-06', difficulty: 'Hard', description: 'Voltage glitching attack targeting the implicit rejection in Kyber decapsulation. Demonstrates key recovery via fault-induced decryption oracle on FPGA target.', url: '#', tags: 'Fault Injection,Kyber,Glitching,PQC' },
+    { title: 'EM Side-Channel on SPHINCS+ WOTS+ Chains', event: 'IACR TCHES Challenge', date: '2023-11', difficulty: 'Hard', description: 'Near-field EM analysis of WOTS+ chain computation leaking secret key material. Full writeup with signal processing pipeline and t-test validation.', url: '#', tags: 'EM Analysis,SPHINCS+,WOTS+,Profiling' },
+    { title: 'Timing Attack on NTT: Exploiting Cache Behaviour', event: 'University CTF 2023', date: '2023-04', difficulty: 'Easy', description: 'Cache-timing attack on a software NTT implementation used in Dilithium. Remote key recovery via timing oracle using ~50k queries.', url: '#', tags: 'Timing,NTT,Cache,Dilithium' },
+  ],
 };
 
 // ── RENDER FUNCTIONS ──
@@ -891,18 +970,43 @@ function renderStats(stats) {
   obs.observe(document.getElementById('stats'));
 }
 
+function renderWriteups(writeups) {
+  const grid = document.getElementById('writeups-grid');
+  grid.innerHTML = writeups.map(w => {
+    const diff = (w.difficulty||'medium').toLowerCase();
+    const diffClass = diff === 'hard' ? 'diff-hard' : diff === 'easy' ? 'diff-easy' : 'diff-medium';
+    const tags = (w.tags||'').split(',').map(t => `<span class="tag">${esc(t.trim())}</span>`).join('');
+    return `
+    <a href="${w.url||'#'}" target="_blank" class="writeup-card reveal">
+      <div class="writeup-meta">
+        <span class="writeup-event">${esc(w.event||'')}</span>
+        <span class="writeup-diff ${diffClass}">${esc(w.difficulty||'')}</span>
+      </div>
+      <div class="writeup-title">${esc(w.title||'')}</div>
+      <div class="writeup-desc">${esc(w.description||'')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.75rem">${tags}</div>
+      <div class="writeup-footer">
+        <span>${esc(w.date||'')}</span>
+        <span class="wf-link">read writeup →</span>
+      </div>
+    </a>`;
+  }).join('');
+  observeReveal();
+}
+
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── LOAD DATA ──
 async function loadData() {
   // Try sheets first, fall back to defaults
-  const [papers, projects, collabs, awards, cw, aboutRows] = await Promise.all([
+  const [papers, projects, collabs, awards, cw, aboutRows, writeups] = await Promise.all([
     fetchSheet('Papers'),
     fetchSheet('Projects'),
     fetchSheet('Collaborators'),
     fetchSheet('Awards'),
     fetchSheet('CurrentWork'),
     fetchSheet('About'),
+    fetchSheet('Writeups'),
   ]);
 
   // About / Stats
@@ -964,6 +1068,7 @@ async function loadData() {
   renderCollaborators(collabs && collabs.length ? collabs : FALLBACK.collaborators);
   renderAwards(awards && awards.length ? awards : FALLBACK.awards);
   if (cw && cw.length) renderCurrentWork(cw);
+  renderWriteups(writeups && writeups.length ? writeups : FALLBACK.writeups);
 }
 
 // ── SCROLL REVEAL ──
@@ -1236,14 +1341,134 @@ function runBios(onDone) {
   }, totalDelay);
 }
 
+// ── OSCILLOSCOPE ──
+function initOscilloscope() {
+  const canvas = document.getElementById('scope-canvas');
+  const ctx    = canvas.getContext('2d');
+  let W, H, offset = 0;
+
+  // Generate a realistic-looking power trace (SCA style)
+  const TRACE_LEN = 1200;
+  const trace = new Float32Array(TRACE_LEN);
+  // base: slow sine (operation rhythm)
+  for (let i = 0; i < TRACE_LEN; i++) {
+    trace[i]  = Math.sin(i * 0.035) * 0.25;        // slow rhythm
+    trace[i] += Math.sin(i * 0.18 + 1.2) * 0.12;   // harmonic
+    trace[i] += (Math.random() - 0.5) * 0.08;        // gaussian noise
+  }
+  // inject spikes (key schedule / S-box moments)
+  const spikes = [60,180,310,440,570,700,830,960,1090];
+  spikes.forEach(s => {
+    if (s < TRACE_LEN) {
+      trace[s]   += (Math.random() > 0.5 ? 1 : -1) * (0.5 + Math.random() * 0.4);
+      trace[s+1] += trace[s] * 0.6;
+      trace[s+2] += trace[s] * 0.3;
+      trace[s-1] += trace[s] * 0.2;
+    }
+  });
+
+  function resize() {
+    W = canvas.width  = canvas.offsetWidth;
+    H = canvas.height = canvas.offsetHeight;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // zero line
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(0,255,136,0.1)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 8]);
+    ctx.moveTo(0, H/2); ctx.lineTo(W, H/2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // trace
+    const amp    = H * 0.36;
+    const mid    = H / 2;
+    const step   = W / 400;   // samples visible
+    const startI = Math.floor(offset) % TRACE_LEN;
+
+    ctx.beginPath();
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth   = 1.5;
+    ctx.shadowColor = '#00ff88';
+    ctx.shadowBlur  = 6;
+
+    for (let x = 0; x < W; x++) {
+      const idx = (startI + Math.floor(x / step)) % TRACE_LEN;
+      const y   = mid - trace[idx] * amp;
+      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // trigger marker
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(251,191,36,0.6)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 5]);
+    ctx.moveTo(W * 0.12, 0); ctx.lineTo(W * 0.12, H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    offset += 0.6;
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', () => { resize(); });
+  resize();
+  requestAnimationFrame(draw);
+}
+
+// ── SEMANTIC SCHOLAR LIVE STATS ──
+async function fetchSemanticScholar() {
+  // Search by name — replace with your exact Semantic Scholar author ID for accuracy
+  // Author ID config: set SEMANTIC_SCHOLAR_ID to your ID from semanticscholar.org/author/...
+  // Leave as '' to search by name (less precise if name is common)
+  const SEMANTIC_SCHOLAR_ID = '';
+
+  try {
+    let url;
+    if (SEMANTIC_SCHOLAR_ID) {
+      url = `https://api.semanticscholar.org/graph/v1/author/${SEMANTIC_SCHOLAR_ID}?fields=citationCount,hIndex,paperCount`;
+    } else {
+      url = `https://api.semanticscholar.org/graph/v1/author/search?query=Sai%20Tarun%20Baratam&fields=citationCount,hIndex,paperCount&limit=1`;
+    }
+
+    const res  = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // unwrap depending on endpoint
+    const author = SEMANTIC_SCHOLAR_ID ? data : (data.data && data.data[0]);
+    if (!author) return;
+
+    const { citationCount, hIndex, paperCount } = author;
+    if (!citationCount && !hIndex) return; // no useful data
+
+    // animate to real values
+    if (citationCount) animateCount(document.getElementById('stat-citations'), citationCount);
+    if (hIndex)        animateCount(document.getElementById('stat-hindex'),    hIndex);
+    if (paperCount)    animateCount(document.getElementById('stat-papers'),    paperCount);
+
+    // show live badge
+    const badge = document.getElementById('scholar-badge');
+    if (badge) badge.textContent = '● live · semantic scholar';
+  } catch { /* silent fail — static data already shown */ }
+}
+
 // ── INIT ──
 runBios(() => {
   initHexGrid();
+  initOscilloscope();
   initScrollBar();
   initTerminal();
   initNavHighlight();
   observeReveal();
   loadData();
+  fetchSemanticScholar();
 });
 </script>
 </body>
