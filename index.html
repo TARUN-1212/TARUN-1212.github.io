@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sai Tarun Baratam | Hardware Security Researcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #090b10;
+      --bg2:      #0d1117;
+      --bg3:      #111827;
+      --green:    #00ff88;
+      --cyan:     #00d4ff;
+      --purple:   #7c3aed;
+      --pink:     #f472b6;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --border:   #1e293b;
+      --glow-g:   0 0 20px rgba(0,255,136,0.3);
+      --glow-c:   0 0 20px rgba(0,212,255,0.3);
+      --mono:     'JetBrains Mono', monospace;
+      --sans:     'Inter', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      overflow-x: hidden;
+    }
+
+    /* ── CIRCUIT BACKGROUND ── */
+    #circuit-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      opacity: 0.07;
+      pointer-events: none;
+    }
+
+    /* ── SCANLINE OVERLAY ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(0,255,136,0.1);
+      backdrop-filter: blur(12px);
+      background: rgba(9,11,16,0.8);
+    }
+
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      color: var(--green);
+      text-shadow: var(--glow-g);
+    }
+
+    .nav-logo span { color: var(--muted); }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.2s, text-shadow 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--green);
+      text-shadow: var(--glow-g);
+    }
+
+    /* ── SECTIONS ── */
+    section {
+      position: relative;
+      z-index: 2;
+    }
+
+    /* ── HERO ── */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6rem 2rem 4rem;
+    }
+
+    .hero-inner {
+      max-width: 800px;
+      width: 100%;
+    }
+
+    .terminal-window {
+      background: var(--bg2);
+      border: 1px solid rgba(0,255,136,0.2);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(0,255,136,0.08), 0 0 120px rgba(0,212,255,0.05);
+    }
+
+    .terminal-bar {
+      background: var(--bg3);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.r { background: #ff5f57; }
+    .dot.y { background: #febc2e; }
+    .dot.g { background: #28c840; }
+
+    .terminal-title {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .terminal-body {
+      padding: 2rem;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      line-height: 2;
+    }
+
+    .t-prompt { color: var(--green); }
+    .t-cmd    { color: var(--text); }
+    .t-key    { color: var(--cyan); }
+    .t-val    { color: var(--text); }
+    .t-accent { color: var(--green); }
+    .t-dim    { color: var(--muted); }
+    .t-pink   { color: var(--pink); }
+
+    .cursor {
+      display: inline-block;
+      width: 10px;
+      height: 1.1em;
+      background: var(--green);
+      vertical-align: text-bottom;
+      animation: blink 1s step-end infinite;
+      box-shadow: var(--glow-g);
+    }
+
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .hero-tagline {
+      margin-top: 2.5rem;
+      padding: 0 0.5rem;
+    }
+
+    .hero-tagline h1 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 700;
+      line-height: 1.1;
+      background: linear-gradient(135deg, var(--green) 0%, var(--cyan) 50%, var(--purple) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-tagline p {
+      margin-top: 1rem;
+      font-size: 1.1rem;
+      color: var(--muted);
+      max-width: 600px;
+    }
+
+    .hero-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 1.5rem;
+    }
+
+    .badge {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.3rem 0.8rem;
+      border-radius: 999px;
+      border: 1px solid;
+    }
+
+    .badge.green { border-color: var(--green); color: var(--green); }
+    .badge.cyan  { border-color: var(--cyan);  color: var(--cyan);  }
+    .badge.pink  { border-color: var(--pink);  color: var(--pink);  }
+
+    .hero-cta {
+      display: flex;
+      gap: 1rem;
+      margin-top: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      padding: 0.7rem 1.5rem;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: #000;
+      border: 1px solid var(--green);
+      font-weight: 700;
+    }
+
+    .btn-primary:hover {
+      box-shadow: var(--glow-g);
+      transform: translateY(-2px);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--cyan);
+      border: 1px solid var(--cyan);
+    }
+
+    .btn-outline:hover {
+      box-shadow: var(--glow-c);
+      transform: translateY(-2px);
+    }
+
+    /* ── SECTION LAYOUT ── */
+    .section-wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 5rem 2rem;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 3rem;
+    }
+
+    .section-label {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--green);
+    }
+
+    .section-title {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 700;
+    }
+
+    .section-line {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, var(--border), transparent);
+    }
+
+    /* ── ABOUT ── */
+    #about { background: var(--bg2); }
+
+    .about-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      align-items: start;
+    }
+
+    @media (max-width: 768px) {
+      .about-grid { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+    }
+
+    .neofetch {
+      background: var(--bg);
+      border: 1px solid rgba(0,255,136,0.15);
+      border-radius: 8px;
+      padding: 1.5rem;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      line-height: 2;
+    }
+
+    .neofetch .nf-field { color: var(--cyan); }
+    .neofetch .nf-sep   { color: var(--muted); }
+    .neofetch .nf-val   { color: var(--text); }
+    .neofetch .nf-name  { color: var(--green); font-weight: 700; font-size: 1rem; }
+
+    .about-text p {
+      color: var(--muted);
+      line-height: 1.8;
+      margin-bottom: 1rem;
+    }
+
+    .about-text p strong { color: var(--text); }
+
+    .skills-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .skill-chip {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.4rem 0.8rem;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .skill-chip:hover {
+      border-color: var(--green);
+      color: var(--green);
+      box-shadow: var(--glow-g);
+    }
+
+    /* ── RESEARCH ── */
+    .research-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .paper-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .paper-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: linear-gradient(to bottom, var(--green), var(--cyan));
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .paper-card:hover {
+      border-color: rgba(0,255,136,0.3);
+      transform: translateX(4px);
+    }
+
+    .paper-card:hover::before { opacity: 1; }
+
+    .paper-venue {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--green);
+      margin-bottom: 0.5rem;
+    }
+
+    .paper-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      line-height: 1.4;
+    }
+
+    .paper-authors {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    .paper-abstract {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+
+    .paper-links { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    .pill-link {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      padding: 0.2rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .pill-link:hover {
+      border-color: var(--cyan);
+      color: var(--cyan);
+    }
+
+    /* ── PROJECTS ── */
+    #projects { background: var(--bg2); }
+
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .project-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      transition: all 0.25s;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .project-card:hover {
+      border-color: rgba(0,212,255,0.4);
+      box-shadow: 0 0 30px rgba(0,212,255,0.08);
+      transform: translateY(-4px);
+    }
+
+    .project-icon {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+    }
+
+    .project-name {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: var(--cyan);
+    }
+
+    .project-desc {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.6;
+      flex: 1;
+      margin-bottom: 1rem;
+    }
+
+    .project-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .tag {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      padding: 0.15rem 0.5rem;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--muted);
+    }
+
+    /* ── CONTACT ── */
+    .contact-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      align-items: center;
+    }
+
+    @media (max-width: 640px) {
+      .contact-grid { grid-template-columns: 1fr; }
+      .about-grid   { grid-template-columns: 1fr; }
+    }
+
+    .contact-text h3 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      background: linear-gradient(to right, var(--green), var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .contact-text p {
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .contact-links {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .contact-link {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--text);
+      transition: all 0.2s;
+      font-size: 0.9rem;
+    }
+
+    .contact-link:hover {
+      border-color: var(--green);
+      color: var(--green);
+      box-shadow: var(--glow-g);
+      transform: translateX(4px);
+    }
+
+    .contact-link-icon {
+      font-family: var(--mono);
+      font-size: 1.2rem;
+      width: 32px;
+      text-align: center;
+    }
+
+    .contact-link-label { font-family: var(--mono); font-size: 0.85rem; }
+    .contact-link-sub   { font-size: 0.75rem; color: var(--muted); margin-top: 0.1rem; }
+
+    /* ── FOOTER ── */
+    footer {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      padding: 2rem;
+      border-top: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    footer span { color: var(--green); }
+
+    /* ── SCROLL REVEAL ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* ── GLITCH ANIMATION ── */
+    @keyframes glitch {
+      0%  { clip-path: inset(20% 0 60% 0); transform: translate(-4px); }
+      20% { clip-path: inset(80% 0 5%  0); transform: translate(4px); }
+      40% { clip-path: inset(50% 0 30% 0); transform: translate(-2px); }
+      60% { clip-path: inset(10% 0 80% 0); transform: translate(2px); }
+      80% { clip-path: inset(70% 0 10% 0); transform: translate(-4px); }
+      100%{ clip-path: inset(30% 0 50% 0); transform: translate(0); }
+    }
+
+    /* ── ACTIVE NAV ── */
+    .nav-links a.active {
+      color: var(--green);
+      text-shadow: var(--glow-g);
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="circuit-canvas"></canvas>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-logo"><span>~/</span>sai-tarun-baratam</div>
+    <ul class="nav-links">
+      <li><a href="#about">about</a></li>
+      <li><a href="#research">research</a></li>
+      <li><a href="#projects">projects</a></li>
+      <li><a href="#contact">contact</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section id="hero">
+    <div class="hero-inner">
+      <div class="terminal-window">
+        <div class="terminal-bar">
+          <div class="dot r"></div>
+          <div class="dot y"></div>
+          <div class="dot g"></div>
+          <div class="terminal-title">bash — sai-tarun-baratam ~ security-research</div>
+        </div>
+        <div class="terminal-body" id="terminal-output"></div>
+      </div>
+
+      <div class="hero-tagline reveal">
+        <h1>Securing the<br/>silicon frontier.</h1>
+        <p>Hardware security researcher working at the intersection of post-quantum cryptography, side-channel analysis, and FPGA/ASIC design.</p>
+        <div class="hero-badges">
+          <span class="badge green">Post-Quantum Crypto</span>
+          <span class="badge cyan">Side-Channel Analysis</span>
+          <span class="badge pink">FPGA · ASIC</span>
+          <span class="badge green">Hardware Security</span>
+          <span class="badge cyan">VLSI Design</span>
+        </div>
+        <div class="hero-cta">
+          <a href="#research" class="btn btn-primary">View Research</a>
+          <a href="#contact"  class="btn btn-outline">Get in Touch</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="about">
+    <div class="section-wrap">
+      <div class="section-header reveal">
+        <span class="section-label">01 //</span>
+        <h2 class="section-title">About</h2>
+        <div class="section-line"></div>
+      </div>
+      <div class="about-grid">
+        <div class="neofetch reveal">
+<pre class="nf-name">sai-tarun-baratam@research</pre>
+<pre class="t-dim">──────────────────────────────</pre>
+<div><span class="nf-field">role       </span><span class="nf-sep"> : </span><span class="nf-val">Hardware Security Researcher</span></div>
+<div><span class="nf-field">focus      </span><span class="nf-sep"> : </span><span class="nf-val">PQC · SCA · VLSI</span></div>
+<div><span class="nf-field">threat     </span><span class="nf-sep"> : </span><span class="nf-val">quantum adversary</span></div>
+<div><span class="nf-field">defense    </span><span class="nf-sep"> : </span><span class="nf-val">lattice crypto + hardware</span></div>
+<div><span class="nf-field">tools      </span><span class="nf-sep"> : </span><span class="nf-val">Vivado · Cadence · Synopsys</span></div>
+<div><span class="nf-field">hdl        </span><span class="nf-sep"> : </span><span class="nf-val">VHDL · Verilog · SystemVerilog</span></div>
+<div><span class="nf-field">languages  </span><span class="nf-sep"> : </span><span class="nf-val">Python · C · MATLAB</span></div>
+<div><span class="nf-field">interests  </span><span class="nf-sep"> : </span><span class="nf-val">CRYSTALS-Kyber · SPHINCS+ · power analysis</span></div>
+<pre class="t-dim">──────────────────────────────</pre>
+<div style="display:flex;gap:6px;margin-top:4px">
+  <span style="display:inline-block;width:14px;height:14px;background:#00ff88;border-radius:2px"></span>
+  <span style="display:inline-block;width:14px;height:14px;background:#00d4ff;border-radius:2px"></span>
+  <span style="display:inline-block;width:14px;height:14px;background:#7c3aed;border-radius:2px"></span>
+  <span style="display:inline-block;width:14px;height:14px;background:#f472b6;border-radius:2px"></span>
+</div>
+        </div>
+
+        <div class="about-text reveal">
+          <p>
+            I'm <strong>Sai Tarun Baratam</strong>, a researcher focused on building hardware that is secure against both classical and quantum threats.
+          </p>
+          <p>
+            My work lives at the crossroads of <strong>post-quantum cryptography</strong> and <strong>hardware implementation</strong> — designing and attacking cryptographic circuits on FPGAs and ASICs, with a particular interest in <strong>side-channel attacks</strong> like power and electromagnetic analysis.
+          </p>
+          <p>
+            I work on efficient hardware architectures for NIST PQC standards (Kyber, Dilithium, SPHINCS+) while simultaneously investigating their physical vulnerabilities — because a mathematically secure algorithm can still leak secrets through its silicon.
+          </p>
+
+          <div class="skills-grid" style="margin-top:1.5rem">
+            <div class="skill-chip">FPGA Design</div>
+            <div class="skill-chip">ASIC Flow</div>
+            <div class="skill-chip">Power Analysis</div>
+            <div class="skill-chip">EM Analysis</div>
+            <div class="skill-chip">CRYSTALS-Kyber</div>
+            <div class="skill-chip">Dilithium</div>
+            <div class="skill-chip">SPHINCS+</div>
+            <div class="skill-chip">RTL Design</div>
+            <div class="skill-chip">DPA / CPA</div>
+            <div class="skill-chip">Lattice Crypto</div>
+            <div class="skill-chip">Hash-based Sig</div>
+            <div class="skill-chip">ChipWhisperer</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESEARCH -->
+  <section id="research">
+    <div class="section-wrap">
+      <div class="section-header reveal">
+        <span class="section-label">02 //</span>
+        <h2 class="section-title">Research & Publications</h2>
+        <div class="section-line"></div>
+      </div>
+
+      <div class="research-list">
+
+        <!-- PAPER PLACEHOLDERS — replace with real ones -->
+        <div class="paper-card reveal">
+          <div class="paper-venue">&#x25B6; IACR ePrint / Conference · 2024</div>
+          <div class="paper-title">Your Paper Title Goes Here — e.g., Side-Channel Resilient Architecture for CRYSTALS-Kyber on FPGA</div>
+          <div class="paper-authors">Sai Tarun Baratam, Co-Author Name, Advisor Name</div>
+          <div class="paper-abstract">
+            Brief abstract or description of the paper. Explain the core contribution in 2–3 sentences. What attack did you prevent, what efficiency did you achieve, what novel countermeasure did you design?
+          </div>
+          <div class="paper-links">
+            <a href="#" class="pill-link">PDF</a>
+            <a href="#" class="pill-link">IACR ePrint</a>
+            <a href="#" class="pill-link">Slides</a>
+            <a href="#" class="pill-link">GitHub</a>
+          </div>
+        </div>
+
+        <div class="paper-card reveal">
+          <div class="paper-venue">&#x25B6; IEEE TCHES / DATE · 2024</div>
+          <div class="paper-title">Your Second Paper — e.g., Power Analysis Attack on Hash-Based Signature Schemes: SPHINCS+ on Microcontrollers</div>
+          <div class="paper-authors">Sai Tarun Baratam, Co-Author Name</div>
+          <div class="paper-abstract">
+            Describe the side-channel vulnerability discovered or countermeasure proposed. Mention target platform, leakage model, and results (number of traces, success rate, area overhead, etc.).
+          </div>
+          <div class="paper-links">
+            <a href="#" class="pill-link">PDF</a>
+            <a href="#" class="pill-link">IEEE Xplore</a>
+            <a href="#" class="pill-link">Code</a>
+          </div>
+        </div>
+
+        <div class="paper-card reveal">
+          <div class="paper-venue">&#x25B6; Workshop / Preprint · 2023</div>
+          <div class="paper-title">Your Third Work — e.g., Efficient NTT Implementation for Lattice-Based Cryptography on ASIC</div>
+          <div class="paper-authors">Sai Tarun Baratam</div>
+          <div class="paper-abstract">
+            Describe the ASIC/FPGA architecture contribution. Mention metrics: throughput, area, power consumption compared to prior work.
+          </div>
+          <div class="paper-links">
+            <a href="#" class="pill-link">PDF</a>
+            <a href="#" class="pill-link">arXiv</a>
+            <a href="#" class="pill-link">Poster</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- PROJECTS -->
+  <section id="projects">
+    <div class="section-wrap">
+      <div class="section-header reveal">
+        <span class="section-label">03 //</span>
+        <h2 class="section-title">Projects</h2>
+        <div class="section-line"></div>
+      </div>
+
+      <div class="projects-grid">
+
+        <div class="project-card reveal">
+          <div class="project-icon">⚡</div>
+          <div class="project-name">PQC Hardware Suite</div>
+          <div class="project-desc">
+            Hardware implementations of NIST PQC finalists (Kyber, Dilithium, SPHINCS+) on Xilinx FPGAs. Benchmarked for throughput, area, and power. Includes masked implementations against DPA.
+          </div>
+          <div class="project-tags">
+            <span class="tag">VHDL</span>
+            <span class="tag">Xilinx Vivado</span>
+            <span class="tag">CRYSTALS-Kyber</span>
+            <span class="tag">NTT</span>
+          </div>
+        </div>
+
+        <div class="project-card reveal">
+          <div class="project-icon">🔬</div>
+          <div class="project-name">SCA Testbench</div>
+          <div class="project-desc">
+            Automated side-channel acquisition and analysis framework using ChipWhisperer. Implements CPA, DPA, and t-test leakage detection for evaluating cryptographic hardware security.
+          </div>
+          <div class="project-tags">
+            <span class="tag">Python</span>
+            <span class="tag">ChipWhisperer</span>
+            <span class="tag">CPA / DPA</span>
+            <span class="tag">Power Traces</span>
+          </div>
+        </div>
+
+        <div class="project-card reveal">
+          <div class="project-icon">🛡️</div>
+          <div class="project-name">Masking Compiler</div>
+          <div class="project-desc">
+            Tool to automatically insert Boolean masking countermeasures into HDL designs. Transforms unprotected RTL into first-order DPA-resistant implementations with minimal overhead.
+          </div>
+          <div class="project-tags">
+            <span class="tag">SystemVerilog</span>
+            <span class="tag">Python</span>
+            <span class="tag">Masking</span>
+            <span class="tag">RTL Transform</span>
+          </div>
+        </div>
+
+        <div class="project-card reveal">
+          <div class="project-icon">🏗️</div>
+          <div class="project-name">ASIC NTT Core</div>
+          <div class="project-desc">
+            High-speed Number Theoretic Transform core designed for ASIC in 45nm. Pipelined butterfly architecture achieving sub-ns critical path. Synthesized and verified with Cadence Genus.
+          </div>
+          <div class="project-tags">
+            <span class="tag">Verilog</span>
+            <span class="tag">Cadence</span>
+            <span class="tag">45nm</span>
+            <span class="tag">NTT</span>
+          </div>
+        </div>
+
+        <div class="project-card reveal">
+          <div class="project-icon">📡</div>
+          <div class="project-name">EM Leakage Mapper</div>
+          <div class="project-desc">
+            Spatial EM analysis tool using near-field probing to map leakage hotspots on ICs. Integrates with oscilloscope control software for automated XY-stage scanning and trace collection.
+          </div>
+          <div class="project-tags">
+            <span class="tag">Python</span>
+            <span class="tag">EM Analysis</span>
+            <span class="tag">NumPy</span>
+            <span class="tag">Hardware</span>
+          </div>
+        </div>
+
+        <div class="project-card reveal">
+          <div class="project-icon">🔐</div>
+          <div class="project-name">PQC Protocol Stack</div>
+          <div class="project-desc">
+            Software/hardware co-design for a post-quantum TLS handshake using Kyber KEM + Dilithium signatures. Runs on FPGA-accelerated embedded platform with real-time key exchange.
+          </div>
+          <div class="project-tags">
+            <span class="tag">C</span>
+            <span class="tag">VHDL</span>
+            <span class="tag">TLS</span>
+            <span class="tag">Kyber KEM</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact">
+    <div class="section-wrap">
+      <div class="section-header reveal">
+        <span class="section-label">04 //</span>
+        <h2 class="section-title">Contact</h2>
+        <div class="section-line"></div>
+      </div>
+      <div class="contact-grid">
+        <div class="contact-text reveal">
+          <h3>Let's talk security.</h3>
+          <p>
+            Open to research collaborations, hardware security consulting, and discussions about post-quantum cryptography implementations. Feel free to reach out.
+          </p>
+          <p style="margin-top:1rem">
+            <span style="color:var(--green);font-family:var(--mono)">$</span> always interested in: joint publications, CTF hardware challenges, FPGA consulting, PQC standardization discussions.
+          </p>
+        </div>
+        <div class="contact-links reveal">
+          <a href="mailto:your@email.com" class="contact-link">
+            <span class="contact-link-icon">✉</span>
+            <div>
+              <div class="contact-link-label">Email</div>
+              <div class="contact-link-sub">your@email.com</div>
+            </div>
+          </a>
+          <a href="https://github.com/TARUN-1212" target="_blank" class="contact-link">
+            <span class="contact-link-icon">⌥</span>
+            <div>
+              <div class="contact-link-label">GitHub</div>
+              <div class="contact-link-sub">github.com/TARUN-1212</div>
+            </div>
+          </a>
+          <a href="https://linkedin.com/in/your-profile" target="_blank" class="contact-link">
+            <span class="contact-link-icon">in</span>
+            <div>
+              <div class="contact-link-label">LinkedIn</div>
+              <div class="contact-link-sub">linkedin.com/in/your-profile</div>
+            </div>
+          </a>
+          <a href="https://scholar.google.com/citations?user=YOURID" target="_blank" class="contact-link">
+            <span class="contact-link-icon">G</span>
+            <div>
+              <div class="contact-link-label">Google Scholar</div>
+              <div class="contact-link-sub">View publications</div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    built with <span>&#x2665;</span> and too much coffee &nbsp;·&nbsp;
+    <span>sai tarun baratam</span> &nbsp;·&nbsp; 2025
+  </footer>
+
+  <script>
+    // ── CIRCUIT CANVAS ──
+    const canvas = document.getElementById('circuit-canvas');
+    const ctx    = canvas.getContext('2d');
+    let W, H, nodes = [];
+
+    function resize() {
+      W = canvas.width  = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    }
+
+    function initNodes() {
+      nodes = [];
+      const cols = Math.floor(W / 80);
+      const rows = Math.floor(H / 80);
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+          if (Math.random() > 0.5) {
+            nodes.push({
+              x: i * 80 + Math.random() * 40,
+              y: j * 80 + Math.random() * 40,
+              pulse: Math.random(),
+              speed: 0.005 + Math.random() * 0.01,
+            });
+          }
+        }
+      }
+    }
+
+    function drawCircuit() {
+      ctx.clearRect(0, 0, W, H);
+      const color = '#00ff88';
+
+      // edges
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[j].x - nodes[i].x;
+          const dy = nodes[j].y - nodes[i].y;
+          const d  = Math.sqrt(dx*dx + dy*dy);
+          if (d < 120) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = (1 - d/120) * 0.6;
+            ctx.lineWidth = 0.5;
+            // right-angle routing
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[i].x, nodes[j].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // nodes
+      nodes.forEach(n => {
+        n.pulse += n.speed;
+        const a = 0.4 + 0.6 * Math.abs(Math.sin(n.pulse));
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, 2, 0, Math.PI*2);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = a;
+        ctx.fill();
+      });
+
+      ctx.globalAlpha = 1;
+      requestAnimationFrame(drawCircuit);
+    }
+
+    window.addEventListener('resize', () => { resize(); initNodes(); });
+    resize(); initNodes(); drawCircuit();
+
+    // ── TERMINAL TYPING ──
+    const lines = [
+      { text: '> whoami', delay: 400,  color: 'green' },
+      { text: 'sai.tarun.baratam — hardware security researcher', delay: 800,  color: '' },
+      { text: '', delay: 200 },
+      { text: '> cat research.txt', delay: 600,  color: 'green' },
+      { text: 'post-quantum cryptography  ░░░░░░░░░░ [FPGA impl]', delay: 400, color: 'cyan' },
+      { text: 'side-channel analysis      ░░░░░░░░░░ [power/EM] ', delay: 200, color: 'cyan' },
+      { text: 'vlsi design                ░░░░░░░░░░ [asic/fpga]', delay: 200, color: 'cyan' },
+      { text: '', delay: 200 },
+      { text: '> status', delay: 500,  color: 'green' },
+      { text: 'breaking ciphers to make them unbreakable.', delay: 300, color: 'pink' },
+      { text: '', delay: 200 },
+      { text: '> _', delay: 100,  color: 'green', cursor: true },
+    ];
+
+    const out = document.getElementById('terminal-output');
+    let lineIdx = 0, charIdx = 0, currentEl = null;
+
+    function nextLine() {
+      if (lineIdx >= lines.length) return;
+      const line = lines[lineIdx];
+
+      if (line.cursor) {
+        const p = document.createElement('div');
+        p.innerHTML = '<span class="t-prompt">&gt; </span><span class="cursor"></span>';
+        out.appendChild(p);
+        lineIdx++;
+        return;
+      }
+
+      currentEl = document.createElement('div');
+      if (line.color === 'green') currentEl.className = 't-prompt';
+      else if (line.color === 'cyan') currentEl.className = 't-key';
+      else if (line.color === 'pink') currentEl.className = 't-pink';
+      out.appendChild(currentEl);
+
+      charIdx = 0;
+      typeChar(line);
+    }
+
+    function typeChar(line) {
+      if (!line.text) {
+        lineIdx++;
+        setTimeout(nextLine, line.delay || 100);
+        return;
+      }
+      if (charIdx < line.text.length) {
+        currentEl.textContent += line.text[charIdx];
+        charIdx++;
+        setTimeout(() => typeChar(line), 28 + Math.random() * 20);
+      } else {
+        lineIdx++;
+        setTimeout(nextLine, line.delay || 100);
+      }
+    }
+
+    setTimeout(nextLine, 600);
+
+    // ── SCROLL REVEAL ──
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          observer.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // ── ACTIVE NAV ──
+    const sections = document.querySelectorAll('section[id]');
+    const navLinks = document.querySelectorAll('.nav-links a');
+
+    const navObs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          navLinks.forEach(a => a.classList.remove('active'));
+          const active = document.querySelector(`.nav-links a[href="#${e.target.id}"]`);
+          if (active) active.classList.add('active');
+        }
+      });
+    }, { threshold: 0.4 });
+
+    sections.forEach(s => navObs.observe(s));
+  </script>
+</body>
+</html>
